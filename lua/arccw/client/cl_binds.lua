@@ -71,16 +71,17 @@ local debounce = 0
 local function ToggleAtts(wep)
     if debounce > CurTime() then return end -- ugly hack for double trigger
     debounce = CurTime() + 0.1
-    local used = false
+    local sounds = {}
     for k, v in pairs(wep.Attachments) do
         local atttbl = v.Installed and ArcCW.AttachmentTable[v.Installed]
-        if atttbl and atttbl.ToggleStats then
-            used = true
+        if atttbl and atttbl.ToggleStats and not v.ToggleLock then
+            if atttbl.ToggleSound then sounds[atttbl.ToggleSound] = true
+            else sounds["weapons/arccw/firemode.wav"] = true end
             wep:ToggleSlot(k, nil, true)
         end
     end
-    if used then
-        EmitSound("weapons/arccw/firemode.wav", EyePos(), -2, CHAN_ITEM, 1,75, 0, math.random(90, 110))
+    for snd, _ in pairs(sounds) do
+        surface.PlaySound(snd)
     end
 end
 
@@ -96,7 +97,7 @@ local function ArcCW_PlayerBindPress(ply, bind, pressed)
     local alt
     bind, alt = ArcCW_TranslateBindToEffect(bind)
 
-    if bind == "firemode" and (alt or !GetConVar("arccw_altfcgkey"):GetBool()) then
+    if bind == "firemode" and (alt or !GetConVar("arccw_altfcgkey"):GetBool()) and !ply:KeyDown(IN_USE) then
         if wep:GetBuff_Override("UBGL") and !alt and !GetConVar("arccw_altubglkey"):GetBool() then
             if lastpressZ >= CurTime() - 0.25 then
                 DoUbgl(wep)
@@ -126,7 +127,7 @@ local function ArcCW_PlayerBindPress(ply, bind, pressed)
         end
 
         block = true
-    elseif bind == "inv" and !ply:KeyDown(IN_USE) and GetConVar("arccw_enable_customization"):GetInt() >= 0 then
+    elseif bind == "inv" and !ply:KeyDown(IN_USE) and GetConVar("arccw_enable_customization"):GetInt() > -1 then
 
         local state = wep:GetState() != ArcCW.STATE_CUSTOMIZE
 
@@ -157,6 +158,7 @@ local function ArcCW_PlayerBindPress(ply, bind, pressed)
             end
         elseif bind == "switchscope" then
             wep:SwitchActiveSights()
+            block = true
         end
     end
 

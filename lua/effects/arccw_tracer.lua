@@ -15,15 +15,30 @@ function EFFECT:Init(data)
 
     local hit = data:GetOrigin()
     local wep = data:GetEntity()
+
+    if !IsValid(wep) then return end
+
     local speed = data:GetScale()
-    local start = IsValid(wep) and wep:GetTracerOrigin() or data:GetStart()
+    local start = IsValid(wep) and (wep.GetTracerOrigin and wep:GetTracerOrigin()) or data:GetStart()
+
+    if GetConVar("arccw_fasttracers"):GetBool() then
+            local fx = EffectData()
+            fx:SetOrigin(hit)
+            fx:SetEntity(wep)
+            fx:SetStart(start)
+            fx:SetScale(4000)
+            util.Effect("tracer", fx)
+            self:Remove()
+        return
+    end
 
     if speed > 0 then
         self.Speed = speed
     end
-
-    if IsValid(wep) then
-        profile = wep:GetBuff_Override("Override_PhysTracerProfile") or wep.PhysTracerProfile or 0
+    
+    local profile = 0
+    if wep.GetBuff_Override then
+        profile = wep:GetBuff_Override("Override_PhysTracerProfile", wep.PhysTracerProfile) or 0
     end
 
     self.LifeTime = (hit - start):Length() / self.Speed
@@ -33,7 +48,7 @@ function EFFECT:Init(data)
 
     self.StartPos = start
     self.EndPos = hit
-    self.Color = ArcCW.BulletProfiles[(profile + 1) or 1] or ArcCW.BulletProfiles[1]
+    self.Color = ArcCW.BulletProfiles[profile + 1] or ArcCW.BulletProfiles[1]
 
     -- print(profile)
 end

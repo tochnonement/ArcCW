@@ -4,12 +4,12 @@ net.Receive("arccw_sp_anim", function(len, ply)
     local mul    = net.ReadFloat()
     local start  = net.ReadFloat()
     local time   = net.ReadBool()
-    local skip   = net.ReadBool()
+    --local skip   = net.ReadBool() Unused
     local ignore = net.ReadBool()
 
     if !wep.ArcCW then return end
 
-    wep:PlayAnimation(key, mul, false, start, time, skip, ignore)
+    wep:PlayAnimation(key, mul, false, start, time, false, ignore)
 end)
 
 net.Receive("arccw_sp_checkpoints", function(len, ply)
@@ -55,8 +55,6 @@ concommand.Add("arccw_listvmanims", function()
         MsgC(Color(255, 255, 255), "\t", alist[i], "\n     [")
         MsgC(Color(255, 230, 230), "\t", vm:SequenceDuration(i), "\n")
     end
-
-    --PrintTable(alist)
 end)
 
 concommand.Add("arccw_listvmbones", function()
@@ -89,18 +87,33 @@ concommand.Add("arccw_listvmatts", function()
         MsgC(Color(255, 255, 255), "\tindex : ", alist[i].id, "\n     [")
         MsgC(Color(255, 190, 190), "\tname: ", alist[i].name, "\n")
     end
-
-    --PrintTable(alist)
 end)
 
-net.Receive("arccw_sp_loadautosave", function(len, ply)
+concommand.Add("arccw_listvmbgs", function()
     local wep = LocalPlayer():GetActiveWeapon()
 
-    if !(wep and IsValid(wep)) then return end
+    if !wep then return end
 
-    if !wep.ArcCW then return end
+    local vm = LocalPlayer():GetViewModel()
 
-    wpn:LoadPreset()
+    if !vm then return end
+
+    local alist = vm:GetBodyGroups()
+
+    for i = 1, #alist do
+        local alistsm = alist[i].submodels
+        MsgC(Color(160, 190, 255), i, " --- ")
+        MsgC(Color(255, 255, 255), "\tid: ", alist[i].id, "\n     [")
+        MsgC(Color(255, 190, 190), "\tname: ", alist[i].name, "\n")
+        MsgC(Color(255, 190, 190), "\tnum: ", alist[i].num, "\n")
+        if alistsm then
+            MsgC(Color(255, 190, 190), "\tsubmodels:\n")
+            for i = 0, #alistsm do
+                MsgC(Color(160, 190, 255), "\t" .. i, " --- ")
+                MsgC(Color(255, 190, 190), alistsm[i], "\n")
+            end
+        end
+    end
 end)
 
 local lastwpn = nil

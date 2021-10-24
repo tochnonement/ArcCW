@@ -24,12 +24,13 @@ function EFFECT:Init(data)
     end
 
     if !IsValid(ent) then self:Remove() return end
-
-    if ent.Owner != LocalPlayer() then
+	
+	local Owner = ent:GetOwner()
+    if Owner != LocalPlayer() then
         mdl = ent.WMModel or ent
     end
 
-    if ent.Owner != LocalPlayer() then
+    if Owner != LocalPlayer() then
         if !GetConVar("arccw_shelleffects"):GetBool() then self:Remove() return end
     end
 
@@ -57,6 +58,20 @@ function EFFECT:Init(data)
         self.Pitch = ent:GetBuff_Override("Override_ShellPitch") or ent.ShellPitch or 100
         self.Sounds = ent:GetBuff_Override("Override_ShellSounds") or ent.ShellSounds
         self.ShellTime = (ent.ShellTime or 0) + st
+
+        if self.Sounds == "autocheck" and ent:GetPrimaryAmmoType() then
+            local t = ent:GetPrimaryAmmoType()
+            if t == game.GetAmmoID("buckshot") then
+                self.Sounds = ArcCW.ShotgunShellSoundsTable
+            elseif ent.Trivia_Calibre and string.find(ent.Trivia_Calibre, ".22") then
+                self.Sounds = ArcCW.TinyShellSoundsTable
+            elseif t == game.GetAmmoID("pistol") or t == game.GetAmmoID("357") or t == game.GetAmmoID("AlyxGun") then
+                self.Sounds = ArcCW.PistolShellSoundsTable
+            else
+                self.Sounds = ArcCW.ShellSoundsTable
+            end
+        end
+        
     end
 
     self:SetPos(origin)
@@ -80,8 +95,8 @@ function EFFECT:Init(data)
 
     local plyvel = Vector(0, 0, 0)
 
-    if IsValid(ent.Owner) then
-        plyvel = ent.Owner:GetAbsVelocity()
+    if IsValid(Owner) then
+        plyvel = Owner:GetAbsVelocity()
     end
 
 
@@ -132,8 +147,10 @@ end
 
 function EFFECT:Think()
     if (self.SpawnTime + self.ShellTime) <= CurTime() then
+		if !IsValid(self) then return end
         self:SetRenderFX( kRenderFxFadeFast )
         if (self.SpawnTime + self.ShellTime + 1) <= CurTime() then
+			if !IsValid(self:GetPhysicsObject()) then return end
             self:GetPhysicsObject():EnableMotion(false)
             if (self.SpawnTime + self.ShellTime + 1.5) <= CurTime() then
                 self:Remove()

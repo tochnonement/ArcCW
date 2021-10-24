@@ -1,4 +1,5 @@
 L = {}
+STL = {}
 
 -- not a translate string, but in case a language needs its own font
 L["default_font"] = "Bahnschrift"
@@ -39,9 +40,10 @@ L["trivia.manufacturer"] = "Manufacturer"
 L["trivia.clipsize"] = "Magazine Capacity"
 L["trivia.precision"] = "Precision"
 L["trivia.noise"] = "Noise"
-L["trivia.recoil"] = "Effective Recoil Momentum"
+L["trivia.recoil"] = "Vertical Recoil"
 L["trivia.penetration"] = "Penetration"
 L["trivia.firerate"] = "Fire Rate"
+L["trivia.firerate_burst"] = "Burst Fire Rate"
 L["trivia.fusetime"] = "Fuse Time"
 
 -- Class
@@ -68,8 +70,8 @@ L["ui.savepreset"] = "Save Preset"
 L["ui.loadpreset"] = "Load Preset"
 L["ui.stats"] = "Stats"
 L["ui.trivia"] = "Trivia"
-L["ui.tttequip"] = "TTT Equipment"
-L["ui.tttchat"] = "TTT Quickchat"
+L["ui.tttequip"] = "Equipment"
+L["ui.tttchat"] = "Quickchat"
 L["ui.position"] = "POSITION"
 L["ui.positives"] = "POSITIVES:"
 L["ui.negatives"] = "NEGATIVES:"
@@ -221,10 +223,10 @@ L["incompatible.never.confirm"] = "You have chosen to never show incompatiblity 
 
 -- 2020-12-11
 L["hud.hp"] = "HP: " -- Used in default HUD
-L["fcg.safe"] = "SAFE"
-L["fcg.semi"] = "SEMI"
-L["fcg.auto"] = "AUTO"
-L["fcg.burst"] = "%dBST"
+L["fcg.safe"] = "Safety"
+L["fcg.semi"] = "Semi-auto"
+L["fcg.auto"] = "Automatic"
+L["fcg.burst"] = "%d-round burst"
 L["fcg.ubgl"] = "UBGL"
 
 -- 2021-01-14
@@ -235,7 +237,130 @@ L["ui.modex"] = "Mode %s"
 -- 2021-01-25
 L["attslot.magazine"] = "Magazine"
 
--- You can translate the trivia of any arbitrary weapon or attachment by adding the phrase ["desc.class_name"]
--- Similarly, you can translate attachment and weapon names with ["name.class_name"]
--- When translating weapon names, append .true for truename, like ["name.arccw_p228.true"]
--- Example: {L["desc.fcg_auto"] = "blah blah blah automatic firemode" ["name.fcg_auto"] = "Auto But Cooler"}
+-- 2021-03-13
+L["trivia.damage"] = "Damage"
+L["trivia.range"] = "Range"
+L["trivia.attackspersecond"] = "Attacks Per Second"
+L["trivia.description"] = "Description"
+L["trivia.meleedamagetype"] = "Damage Type"
+
+-- Units
+L["unit.rpm"] = "RPM"
+L["unit.moa"] = "MOA"
+L["unit.mm"] = "mm"
+L["unit.db"] = "dB"
+L["unit.bce"] = "BC"
+L["unit.aps"] = "APS"
+
+-- melee damage types
+L["dmg.generic"] = "Unarmed"
+L["dmg.bullet"] = "Piercing"
+L["dmg.slash"] = "Slashing"
+L["dmg.club"] = "Blunt"
+L["dmg.shock"] = "Shock"
+
+L["ui.presets"] = "Presets"
+L["ui.customize"] = "Customize"
+L["ui.inventory"] = "Inventory"
+
+-- 2021-05-05
+L["ui.gamemode_buttons"] = "Gamemode-specific commands"
+L["ui.gamemode_usehint"] = "You can hold USE to access original keybinds."
+L["ui.darkrpdrop"] = "Drop Weapon"
+L["ui.noatts"] = "You have no attachments"
+L["ui.noatts_slot"] = "You have no attachments for this slot"
+L["ui.lockinv"] = "These attachments are unlocked for all weapons."
+L["autostat.ammotype"] = "Converts weapon ammo type to %s"
+
+-- 2021-05-08
+L["autostat.rangemin"] = "Minimum range"
+
+-- 2021-05-13
+L["autostat.malfunctionmean"] = "Reliability"
+L["ui.heat"] = "HEAT"
+L["ui.jammed"] = "JAMMED"
+
+-- 2021-05-15
+L["trivia.muzzlevel"] = "Muzzle Velocity"
+L["unit.mps"] = "m/s"
+L["unit.lbfps"] = "lb-fps"
+L["trivia.recoilside"] = "Horizontal Recoil"
+
+--2021-05-27
+L["ui.pickx"] = "Attachments: %d/%d"
+L["ui.ballistics"] = "Ballistics"
+
+L["ammo.pistol"] = "Pistol Ammo"
+L["ammo.357"] = "Magnum Ammo"
+L["ammo.smg1"] = "Carbine Ammo"
+L["ammo.ar2"] = "Rifle Ammo"
+L["ammo.buckshot"] = "Shotgun Ammo"
+L["ammo.sniperpenetratedround"] = "Sniper Ammo"
+L["ammo.smg1_grenade"] = "Rifle Grenades"
+
+--2021-05-31
+L["ui.nodata"] = "No Data"
+L["ui.createpreset"] = "Create"
+L["ui.deletepreset"] = "Delete"
+
+--2021-06-09 nice
+L["autostat.clipsize"] = "%d-round magazine capacity"
+
+--2021-06-30
+L["autostat.bipod2"] = "Allows bipod (-%d%% Dispersion, -%d%% Recoil)"
+L["autostat.nobipod"] = "Disables bipod"
+
+--2021-07-01
+L["fcg.safe2"] = "Lowered"
+L["fcg.dact"] = "Double-action"
+L["fcg.sact"] = "Single-action"
+L["fcg.bolt"] = "Bolt-action"
+L["fcg.pump"] = "Pump-action"
+L["fcg.lever"] = "Lever-action"
+L["fcg.manual"] = "Manual-action"
+L["fcg.break"] = "Break-action"
+L["fcg.sngl"] = "Single"
+L["fcg.both"] = "Both"
+
+--2021-08-11
+L["autostat.clipsize.mod"] = "Magazine capacity" -- used for Add_ClipSize and Mult_ClipSize
+
+--2021-08-22
+L["trivia.recoilscore"] = "Recoil Score (Lower is better)"
+L["fcg.safe.abbrev"] = "SAFE"
+L["fcg.semi.abbrev"] = "SEMI"
+L["fcg.auto.abbrev"] = "AUTO"
+L["fcg.burst.abbrev"] = "%d-BST"
+L["fcg.ubgl.abbrev"] = "UBGL"
+L["fcg.safe2.abbrev"] = "LOW"
+L["fcg.dact.abbrev"] = "DACT"
+L["fcg.sact.abbrev"] = "SACT"
+L["fcg.bolt.abbrev"] = "BOLT"
+L["fcg.pump.abbrev"] = "PUMP"
+L["fcg.lever.abbrev"] = "LEVER"
+L["fcg.manual.abbrev"] = "MANUAL"
+L["fcg.break.abbrev"] = "BREAK"
+L["fcg.sngl.abbrev"] = "SNGL"
+L["fcg.both.abbrev"] = "BOTH"
+
+-- 2021-10-10
+STL["lowered"] = "fcg.safe2"
+STL["double-action"] = "fcg.dact"
+STL["single-action"] = "fcg.sact"
+STL["bolt-action"] = "fcg.bolt"
+STL["pump-action"] = "fcg.pump"
+STL["lever-action"] = "fcg.lever"
+STL["manual-action"] = "fcg.manual"
+STL["break-action"] = "fcg.break"
+--STL["single"] = "fcg.sngl"
+--STL["both"] = "fcg.both"
+
+--[[]
+You can translate the trivia of any arbitrary weapon or attachment by adding the phrase ["desc.class_name"]
+Similarly, you can translate attachment and weapon names with ["name.class_name"]
+When translating weapon names, append .true for truename, like ["name.arccw_p228.true"]
+Example:
+ L["desc.fcg_auto"] = "blah blah blah automatic firemode"
+ L["name.fcg_auto"] = "Auto But Cooler"
+You can also translate custom firemodes with "fcg.FIREMODE_NAME"
+]]
