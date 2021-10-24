@@ -37,9 +37,10 @@ function ArcCW:AddGrenadeAmmo()
             local wpntbl = weapons.Get(class)
 
             if (wpntbl.Throwing or wpntbl.Disposable) and !wpntbl.Singleton and !wpntbl.DoNotEquipmentAmmo then
-                local ammoid = game.GetAmmoID(class)
-
-                if ammoid == -1 then
+                -- ammoid check will cause inconsistency between SV/CL on map change
+                -- Initialize is only run once anyways, so it should be fine
+                --local ammoid = game.GetAmmoID(class)
+                --if ammoid == -1 then
                     -- if ammo type does not exist, build it
                     game.AddAmmoType({
                         name = class,
@@ -48,7 +49,8 @@ function ArcCW:AddGrenadeAmmo()
                     if CLIENT then
                         language.Add(class .. "_ammo", wpntbl.PrintName)
                     end
-                end
+                    ArcCW.LangTable["en"]["ammo." .. class] = wpntbl.PrintName
+                --end
 
                 k.Primary.Ammo = class
                 k.OldAmmo = class
@@ -60,9 +62,10 @@ end
 hook.Add("Initialize", "ArcCW_AddGrenadeAmmo", ArcCW.AddGrenadeAmmo)
 
 if SERVER then
-
     hook.Add( "OnEntityCreated", "ArcCW_AmmoReplacement", function(ent)
-        if GetConVar("arccw_ammo_replace"):GetBool() and ArcCW.AmmoEntToArcCW[ent:GetClass()] then
+        if ((engine.ActiveGamemode() == "terrortown" and GetConVar("arccw_ttt_ammo"):GetBool()) or
+            (engine.ActiveGamemode() != "terrortown" and GetConVar("arccw_ammo_replace"):GetBool()))
+                and ArcCW.AmmoEntToArcCW[ent:GetClass()] then
             timer.Simple(0, function()
                 if !IsValid(ent) then return end
                 local ammoent = ents.Create(ArcCW.AmmoEntToArcCW[ent:GetClass()])
@@ -77,14 +80,15 @@ if SERVER then
                         timer.Simple(2, function()
                             if IsValid(ammoent) then ammoent:SetOwner(nil) end
                         end)
+                        ammoent.AmmoCount = ent.AmmoAmount
                     end
-                    -- Dropped ammo may have less rounds than usual
-                    ammoent.AmmoCount = ent.AmmoAmount or ammoent.AmmoCount
+                    --[[]
                     if ent:GetClass() == "item_ammo_pistol_ttt" and ent.AmmoCount == 20 then
                         -- Extremely ugly hack: TTT pistol ammo only gives 20 rounds but we want it to be 30
                         -- Because most SMGs use pistol ammo (unlike vanilla TTT) and it runs out quickly
                         ammoent.AmmoCount = 30
                     end
+                    ]]
                     ammoent:SetNWInt("truecount", ammoent.AmmoCount)
                 end
             end)

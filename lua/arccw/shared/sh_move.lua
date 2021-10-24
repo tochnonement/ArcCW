@@ -14,18 +14,8 @@ function ArcCW.Move(ply, mv, cmd)
     local basespd = (Vector(cmd:GetForwardMove(), cmd:GetUpMove(), cmd:GetSideMove())):Length()
     basespd = math.min(basespd, mv:GetMaxClientSpeed())
 
-    local shootmove = wpn:GetBuff("ShootSpeedMult")
-
-    local delta = 0 -- how close should we be to the shoot speed mult
+    local shotdelta = 0 -- how close should we be to the shoot speed mult
     local shottime = wpn:GetNextPrimaryFireSlowdown() - CurTime()
-
-    if shottime > 0 then -- apply full shoot move speed
-        delta = 1
-    else -- apply partial shoot move speed
-        local delay = wpn:GetFiringDelay()
-        local aftershottime = shottime / delay
-        delta = math.Clamp(aftershottime, 0, 1)
-    end
 
     local blocksprint = false
 
@@ -49,16 +39,29 @@ function ArcCW.Move(ply, mv, cmd)
         s = 0.0001
     end
 
-    s = s * Lerp(delta, 1, shootmove)
+    if shottime > 0 then
+        -- full slowdown for duration of firing
+        shotdelta = 1
+    else
+        -- recover from firing slowdown after shadow duration
+        local delay = wpn:GetFiringDelay()
+        local aftershottime = -shottime / delay
+        shotdelta = math.Clamp(1 - aftershottime, 0, 1)
+    end
+    local shootmove = math.Clamp(wpn:GetBuff("ShootSpeedMult"), 0.0001, 1)
+    s = s * Lerp(shotdelta, 1, shootmove)
 
     mv:SetMaxSpeed(basespd * s)
     mv:SetMaxClientSpeed(basespd * s)
-
-    wpn.StrafeSpeed = math.Clamp(mv:GetSideSpeed(), -1, 1)
-
+    ply.ArcCW_LastTickSpeedMult = s -- in case other addons need it
 end
 
 hook.Add("SetupMove", "ArcCW_SetupMove", ArcCW.Move)
+
+local limy_p = 75
+local limy_n = -75
+local limp_p = 30
+local limp_n = -30
 
 function ArcCW.CreateMove(cmd)
     local ply = LocalPlayer()
@@ -67,21 +70,16 @@ function ArcCW.CreateMove(cmd)
     if !wpn.ArcCW then return end
 
     if wpn:GetInBipod() then
-        if !wpn.BipodAngle then
-            wpn.BipodPos = wpn:GetOwner():EyePos()
-            wpn.BipodAngle = wpn:GetOwner():EyeAngles()
+        if !wpn:GetBipodAngle() then
+            wpn:SetBipodPos(wpn:GetOwner():EyePos())
+            wpn:SetBipodAngle(wpn:GetOwner():EyeAngles())
         end
 
-        local bipang = wpn.BipodAngle
+        local bipang = wpn:GetBipodAngle()
         local ang = cmd:GetViewAngles()
 
         local dy = math.AngleDifference(ang.y, bipang.y)
         local dp = math.AngleDifference(ang.p, bipang.p)
-
-        local limy_p = 75
-        local limy_n = -75
-        local limp_p = 30
-        local limp_n = -30
 
         if dy > limy_p then
             ang.y = bipang.y + limy_p
@@ -97,14 +95,6 @@ function ArcCW.CreateMove(cmd)
 
         cmd:SetViewAngles(ang)
     end
-
-    local ang2 = cmd:GetViewAngles()
-
-    -- ang2 = ang2 - (wpn.ViewPunchAngle * FrameTime() * 60)
-
-    ang2 = ang2 - (Angle(wpn.RecoilAmount, wpn.RecoilAmountSide, 0) * FrameTime() * 30)
-
-    cmd:SetViewAngles(ang2)
 end
 
 hook.Add("CreateMove", "ArcCW_CreateMove", ArcCW.CreateMove)
@@ -119,6 +109,8 @@ local function tgt_pos(ent, head)
     return pos
 end
 
+local lst = SysTime()
+
 function ArcCW.StartCommand(ply, ucmd)
     -- Sprint will not interrupt a runaway burst
     local wep = ply:GetActiveWeapon()
@@ -127,6 +119,17 @@ function ArcCW.StartCommand(ply, ucmd)
             and !(wep:GetBuff_Override("Override_ShootWhileSprint") or wep.ShootWhileSprint) then
         ucmd:SetButtons(ucmd:GetButtons() - IN_SPEED)
     end
+
+    -- Holster code
+    if IsValid(wep) and wep.ArcCW then
+        if wep:GetHolster_Time() != 0 and wep:GetHolster_Time() <= CurTime() then
+            if IsValid(wep:GetHolster_Entity()) then
+                wep:SetHolster_Time(-math.huge)
+                ucmd:SelectWeapon(wep:GetHolster_Entity())
+            end
+        end
+    end
+
 
     -- Aim assist
     if CLIENT and IsValid(wep) and wep.ArcCW
@@ -176,17 +179,23 @@ function ArcCW.StartCommand(ply, ucmd)
             end
         end
     end
+
+    if CLIENT and IsValid(wep) and wep.ArcCW then
+        local ang2 = ucmd:GetViewAngles()
+        local ft = (SysTime() - (lst or SysTime())) * GetConVar("host_timescale"):GetFloat()
+
+        local recoil = Angle()
+        recoil = recoil + (wep:GetBuff_Override("Override_RecoilDirection") or wep.RecoilDirection) * wep.RecoilAmount
+        recoil = recoil + (wep:GetBuff_Override("Override_RecoilDirectionSide") or wep.RecoilDirectionSide) * wep.RecoilAmountSide
+        ang2 = ang2 - (recoil * ft * 30)
+        ucmd:SetViewAngles(ang2)
+
+        local r = wep.RecoilAmount
+        local rs = wep.RecoilAmountSide
+        wep.RecoilAmount = math.Approach(wep.RecoilAmount, 0, ft * 20 * r)
+        wep.RecoilAmountSide = math.Approach(wep.RecoilAmountSide, 0, ft * 20 * rs)
+    end
+    lst = SysTime()
 end
 
 hook.Add("StartCommand", "ArcCW_StartCommand", ArcCW.StartCommand)
-
-function ArcCW.StrafeTilt(wep)
-    if GetConVar("arccw_strafetilt"):GetBool() then
-        local tilt = wep.StrafeSpeed or 0
-        if wep:GetState() == ArcCW.STATE_SIGHTS and wep:GetActiveSights().Holosight then
-            tilt = tilt * (wep:GetBuff("MoveDispersion") / 360 / 60) * 2
-        end
-        return tilt
-    end
-    return 0
-end

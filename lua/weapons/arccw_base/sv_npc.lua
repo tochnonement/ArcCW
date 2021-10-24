@@ -39,15 +39,14 @@ function SWEP:AssignRandomAttToSlot(slot)
     if slot.DoNotRandomize then return end
     if slot.Installed then return end
 
-    local atts = ArcCW:GetAttsForSlot(slot.Slot, self)
-    if #atts <= 0 then return end
-
-    slot.Installed = table.Random(atts)
+    local att = ArcCW:RollRandomAttachment(true, self, slot)
+    if !att then return end
+    slot.Installed = att
 
     local atttbl = ArcCW.AttachmentTable[slot.Installed]
 
-    if !ArcCW:SlotAcceptsAtt(slot.Slot, self, slot.Installed) then return end
-    if !self:CheckFlags(atttbl.ExcludeFlags, atttbl.RequireFlags) then return end
+    --if !ArcCW:SlotAcceptsAtt(slot.Slot, self, slot.Installed) then return end
+    --if !self:CheckFlags(atttbl.ExcludeFlags, atttbl.RequireFlags) then return end
 
     if atttbl.MountPositionOverride then
         slot.SlidePos = atttbl.MountPositionOverride
@@ -72,7 +71,7 @@ function SWEP:NPC_SetupAttachments()
     local n = 0
 
     for i, slot in pairs(self.Attachments) do
-        if n >= pick then continue end
+        if n > pick then continue end
         if !self:CheckFlags(slot.ExcludeFlags, slot.RequireFlags) then continue end
         if math.Rand(0, 100) > (chance * (slot.RandomChance or 1)) then continue end
 
@@ -88,9 +87,6 @@ function SWEP:NPC_SetupAttachments()
         end
         if !self.Attachments[s] then s = i end
 
-        local atts = ArcCW:GetAttsForSlot(self.Attachments[s].Slot, self)
-        if #atts <= 0 then continue end
-
         chance = chance - chancestep
 
         self:AssignRandomAttToSlot(self.Attachments[s])
@@ -98,10 +94,11 @@ function SWEP:NPC_SetupAttachments()
         n = n + 1
     end
 
+    self.ActiveElementCache = nil -- Reset cache so we have the proper attachments to check with
     for i, slot in pairs(self.Attachments) do
         if !slot.Installed then continue end
         local atttbl = ArcCW.AttachmentTable[slot.Installed]
-        if !ArcCW:SlotAcceptsAtt(slot.Slot, self, slot.Installed) then slot.Installed = nil end
+        if !ArcCW:SlotAcceptsAtt(slot.Slot, self, slot.Installed) then slot.Installed = nil continue end
         if !self:CheckFlags(slot.ExcludeFlags, slot.RequireFlags) then slot.Installed = nil continue end
         if !self:CheckFlags(atttbl.ExcludeFlags, atttbl.RequireFlags) then slot.Installed = nil continue end
     end
@@ -353,7 +350,7 @@ function SWEP:GetNPCRestTimes()
     local o = 1
 
     o = o + (m * rs * 0.5)
-    o = o + postburst
+    o = o + postburst * self:GetBuff_Mult("Mult_PostBurstDelay") + self:GetBuff_Add("Add_PostBurstDelay")
 
     return 0.2 * o, 0.6 * o
 end
@@ -367,5 +364,11 @@ function SWEP:OnDrop()
 
     if self.Singleton or self.Primary.ClipSize == -1 then
         self.Primary.DefaultClip = 1
+    end
+
+    if engine.ActiveGamemode() == "terrortown" then
+        self.UnReady = true
+    else
+        self.UnReady = false
     end
 end

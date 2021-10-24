@@ -5,9 +5,6 @@ function SWEP:GetSightTime()
     return self:GetBuff("SightTime")
 end
 
-SWEP.LastEnterSprintTime = 0
-SWEP.LastExitSprintTime = 0
-
 function SWEP:EnterSprint()
     if engine.ActiveGamemode() == "terrortown" and !(TTT2 and self:GetOwner().isSprinting) then return end
     if self:GetState() == ArcCW.STATE_SPRINT then return end
@@ -16,6 +13,8 @@ function SWEP:EnterSprint()
     self.Sighted = false
     self.Sprinted = true
 
+    local ct = CurTime()
+
     -- self.SwayScale = 1
     -- self.BobScale = 5
 
@@ -23,18 +22,16 @@ function SWEP:EnterSprint()
 
     local s = self:GetBuff_Override("Override_ShootWhileSprint") or self.ShootWhileSprint
 
-    if !s and self:GetNextPrimaryFire() <= CurTime() then
-        self:SetNextPrimaryFire(CurTime())
+    if !s and self:GetNextPrimaryFire() <= ct then
+        self:SetNextPrimaryFire(ct)
     end
-
-    self.LastEnterSprintTime = CurTime()
 
     local anim = self:SelectAnimation("enter_sprint")
     if anim and !s then
         self:PlayAnimation(anim, 1 * self:GetBuff_Mult("Mult_SightTime"), true, nil, false, nil, false, false)
-        self:SetReloading(CurTime() + self:GetAnimKeyTime(anim) * self:GetBuff_Mult("Mult_SightTime"))
+        --self:SetReloading(ct + self:GetAnimKeyTime(anim) * self:GetBuff_Mult("Mult_SightTime"))
     --elseif !anim and !s then -- Not needed because ExitSprint handles it properly
-        --self:SetReloading(CurTime() + self:GetSprintTime())
+        --self:SetReloading(ct + self:GetSprintTime())
     end
 end
 
@@ -42,6 +39,7 @@ function SWEP:ExitSprint()
     if self:GetState() == ArcCW.STATE_IDLE then return end
 
     local delta = self:GetSprintDelta()
+    local ct = CurTime()
 
     self:SetState(ArcCW.STATE_IDLE)
     self.Sighted = false
@@ -54,27 +52,24 @@ function SWEP:ExitSprint()
 
     local s = self:GetBuff_Override("Override_ShootWhileSprint") or self.ShootWhileSprint
 
-    if !s and self:GetNextPrimaryFire() <= CurTime() then
-        self:SetNextPrimaryFire(CurTime())
+    if !s and self:GetNextPrimaryFire() <= ct then
+        self:SetNextPrimaryFire(ct)
     end
 
     if self:GetOwner():KeyDown(IN_ATTACK2) then
         self:EnterSights()
     end
 
-    self.LastExitSprintTime = CurTime() - self:GetSprintTime() * delta
-
     local anim = self:SelectAnimation("exit_sprint")
     if anim and !s then
         self:PlayAnimation(anim, 1 * self:GetBuff_Mult("Mult_SightTime"), true, nil, false, nil, false, false)
-        self:SetReloading(CurTime() + self:GetAnimKeyTime(anim) * self:GetBuff_Mult("Mult_SightTime"))
+        self:SetReloading(ct + self:GetAnimKeyTime(anim) * self:GetBuff_Mult("Mult_SightTime"))
     elseif !anim and !s then
-        self:SetReloading(CurTime() + self:GetSprintTime() * delta)
+        self:SetReloading(UnPredictedCurTime() + self:GetSprintTime() * delta)
     end
 end
 
-SWEP.LastEnterSightTime = 0
-SWEP.LastExitSightTime = 0
+-- defined above already?
 
 function SWEP:EnterSights()
     local asight = self:GetActiveSights()
@@ -83,6 +78,7 @@ function SWEP:EnterSights()
     if self:GetCurrentFiremode().Mode == 0 then return end
     if !self.ReloadInSights and (self:GetReloading() or self:GetOwner():KeyDown(IN_RELOAD)) then return end
     if self:GetBuff_Hook("Hook_ShouldNotSight") then return end
+    if (!game.SinglePlayer() and !IsFirstTimePredicted()) then return end
 
     self:SetupActiveSights()
 
@@ -93,8 +89,6 @@ function SWEP:EnterSights()
     self:SetShouldHoldType()
 
     self:MyEmitSound(asight.SwitchToSound or "", 75, math.Rand(95, 105), 0.5, CHAN_AUTO)
-
-    self.LastEnterSightTime = CurTime()
 
     local anim = self:SelectAnimation("enter_sight")
     if anim then
@@ -108,6 +102,7 @@ function SWEP:ExitSights()
     local asight = self:GetActiveSights()
     if self:GetState() != ArcCW.STATE_SIGHTS then return end
     if self.LockSightsInReload and self:GetReloading() then return end
+    if (!game.SinglePlayer() and !IsFirstTimePredicted()) then return end
 
     self:SetState(ArcCW.STATE_IDLE)
     self.Sighted = false
@@ -115,15 +110,13 @@ function SWEP:ExitSights()
 
     self:SetShouldHoldType()
 
+    self:MyEmitSound(asight.SwitchFromSound or "", 75, math.Rand(80, 90), 0.5, CHAN_AUTO)
+
     if self:InSprint() then
         self:EnterSprint()
     end
 
-    if !game.SinglePlayer() and !IsFirstTimePredicted() then return end
-
     self:MyEmitSound(asight.SwitchFromSound or "", 75, math.Rand(80, 90), 0.5, CHAN_AUTO)
-
-    self.LastExitSightTime = CurTime()
 
     local anim = self:SelectAnimation("exit_sight")
     if anim then
@@ -135,63 +128,6 @@ end
 
 function SWEP:GetSprintTime()
     return self:GetSightTime()
-end
-
-function SWEP:GetSprintDelta()
-    local lst = self.LastExitSprintTime
-    local st = self:GetSprintTime()
-    local minus = 1
-
-    if vrmod and vrmod.IsPlayerInVR(self:GetOwner()) then
-        return 0 -- This ensures sights will always draw
-    end
-
-    if self:GetState() == ArcCW.STATE_SPRINT then
-        lst = self.LastEnterSprintTime
-        minus = 0
-        if CurTime() - lst >= st then
-            return 1
-        end
-    else
-        if CurTime() - lst >= st then
-            return 0
-        end
-    end
-
-    local delta = minus - math.Clamp((CurTime() - lst) / st, 0, 1)
-
-    delta = math.abs(delta)
-
-    return delta
-end
-
-function SWEP:GetSightDelta()
-    local lst = self.LastExitSightTime
-    local st = self:GetSightTime()
-    local minus = 0
-
-    if vrmod and vrmod.IsPlayerInVR(self:GetOwner()) then
-        return 0 -- This ensures sights will always draw
-    end
-
-    if self:GetState() == ArcCW.STATE_SIGHTS then
-        lst = self.LastEnterSightTime
-        minus = 1
-
-        if CurTime() - lst >= st then
-            return 0
-        end
-    else
-        if CurTime() - lst >= st then
-            return 1
-        end
-    end
-
-    local delta = minus - math.Clamp((CurTime() - lst) / st, 0, 1)
-
-    delta = math.abs(delta)
-
-    return delta
 end
 
 SWEP.SightTable = {}
@@ -209,6 +145,7 @@ function SWEP:SetupActiveSights()
     if !vm or !vm:IsValid() then return end
 
     local kbi = self.KeepBaseIrons or true
+    local bif = self.BaseIronsFirst or true
 
     for i, k in pairs(self.Attachments) do
         if !k.Installed then continue end
@@ -219,6 +156,7 @@ function SWEP:SetupActiveSights()
         if !addsights then continue end
 
         if !k.KeepBaseIrons and !atttbl.KeepBaseIrons then kbi = false end
+        if !k.BaseIronsFirst and !atttbl.BaseIronsFirst then bif = false end
 
         for _, s in pairs(addsights) do
             local stab = table.Copy(s)
@@ -393,7 +331,8 @@ function SWEP:SetupActiveSights()
 
                 evpos = evpos * (k.VMScale or Vector(1, 1, 1))
 
-                if !s.IgnoreExtra then
+                --if !s.IgnoreExtra then
+                if false then -- Always ignore extra. Allow the sight creator to define the distance.
                     evpos = evpos + Vector(0, k.ExtraSightDist or self.ExtraSightDist or 0, 0)
                 end
 
@@ -420,7 +359,12 @@ function SWEP:SetupActiveSights()
     end
 
     if kbi then
-        table.insert(sighttable, table.Copy(self:GetBuff_Override("Override_IronSightStruct") or self.IronSightStruct))
+        local t = table.Copy(self:GetBuff_Override("Override_IronSightStruct") or self.IronSightStruct)
+        if bif then
+            table.insert(sighttable, 1, t)
+        else
+            table.insert(sighttable, t)
+        end
     end
 
     self.SightTable = sighttable
@@ -450,12 +394,6 @@ function SWEP:SwitchActiveSights()
     if asight2.SwitchToSound then
         self:MyEmitSound(asight2.SwitchToSound, 75, math.Rand(95, 105), 0.5, CHAN_VOICE2)
     end
-
-    if self:GetNextPrimaryFire() <= (CurTime() + self:GetSightTime()) then
-        self:SetNextPrimaryFire(CurTime() + self:GetSightTime())
-    end
-
-    self.LastEnterSightTime = CurTime()
 end
 
 function SWEP:GetActiveSights()
@@ -472,6 +410,8 @@ end
 
 function SWEP:TranslateFOV(fov)
     local irons = self:GetActiveSights()
+
+    if CLIENT and GetConVar("arccw_dev_benchgun"):GetBool() then self.CurrentFOV = fov self.CurrentViewModelFOV = fov return fov end
     --if !irons then return end
     --if !irons.Magnification then return fov end
     --if irons.Magnification == 1 then return fov end
@@ -483,9 +423,14 @@ function SWEP:TranslateFOV(fov)
     local app_vm = self.ViewModelFOV + self:GetOwner():GetInfoNum("arccw_vm_fov", 0) + 10
 
     if self:GetState() == ArcCW.STATE_SIGHTS then
-        fov = 75
+        local sgreloading = (self:GetShotgunReloading() == 2 or self:GetShotgunReloading() == 4)
+        local delta = self:GetSightDelta()
+        delta = math.pow(delta, 2)
+        if CLIENT then fov = math.Clamp(( (75*(1-delta)) + (GetConVar("fov_desired"):GetInt()*delta) ), 75, 100) end
         app_vm = irons.ViewModelFOV or 45
-        div = math.max(irons.Magnification * (self:GetReloadingREAL() - self.ReloadInSights_CloseIn > CurTime() and self.ReloadInSights_FOVMult or 1), 1)
+        div = irons.Magnification * ((sgreloading or self:GetReloadingREAL() - self.ReloadInSights_CloseIn > CurTime()) and self.ReloadInSights_FOVMult or 1)
+        div = math.max(div, 1)
+        div = (1 * (1-delta)) + div*delta
     end
 
     -- something about this doesn't work in multiplayer
@@ -497,9 +442,14 @@ function SWEP:TranslateFOV(fov)
     self.CurrentFOV = math.Approach(self.CurrentFOV, self.ApproachFOV, FrameTime() * (self.CurrentFOV - self.ApproachFOV))
 
     self.CurrentViewModelFOV = self.CurrentViewModelFOV or self.ViewModelFOV
-
     self.CurrentViewModelFOV = math.Approach(self.CurrentViewModelFOV, app_vm, FrameTime() * (self.CurrentViewModelFOV - app_vm))
 
+    -- DOES A WEIRD SNAPPY THING WHEN YOU ENTER IRONSIGHTS
+    -- DOES A WEIRD SNAPPY THING WHEN YOU ENTER IRONSIGHTS
+    --[[if CLIENT and self:GetState() != ArcCW.STATE_SIGHTS and math.abs(GetConVar("fov_desired"):GetFloat() - self.CurrentFOV) > 0.0001 then
+        -- This mainly exists to handle suitzoom, as you can now hold USE to use it
+        self.CurrentViewModelFOV = app_vm * (self.CurrentFOV / GetConVar("fov_desired"):GetFloat())
+    end]]
     return self.CurrentFOV
 
     -- return 90

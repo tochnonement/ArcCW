@@ -1,7 +1,6 @@
 ArcCW.AttachmentBlacklistTable = ArcCW.AttachmentBlacklistTable or {}
 
 function ArcCW:PlayerCanAttach(ply, wep, attname, slot, detach)
-
     -- The global variable takes priority over everything
     if !ArcCW.EnableCustomization then return false end
 
@@ -21,17 +20,74 @@ function ArcCW:PlayerCanAttach(ply, wep, attname, slot, detach)
     return (ret == nil and true) or ret
 end
 
-function ArcCW:GetAttsForSlot(slot, wep)
+function ArcCW:GetAttsForSlot(slot, wep, random)
     local ret = {}
 
-    for id, _ in pairs(ArcCW.AttachmentTable) do
+    for id, atttbl in pairs(ArcCW.AttachmentTable) do
 
         if !ArcCW:SlotAcceptsAtt(slot, wep, id) then continue end
+        if random and (atttbl.NoRandom or (atttbl.RandomWeight or 1) <= 0) then continue end
 
         table.insert(ret, id)
     end
 
     return ret
+end
+
+function ArcCW:GetAttList(name, filter)
+    if self.AttachmentCachedLists[name] then return self.AttachmentCachedLists[name] end
+    self.AttachmentCachedLists[name] = {}
+    for k, v in pairs(self.AttachmentTable) do
+        local k2, v2 = filter(k, v)
+        if k2 then
+            self.AttachmentCachedLists[name][k2] = v2
+        end
+    end
+    return self.AttachmentCachedLists[name]
+end
+
+local function weighted_random(tbl, amt)
+    amt = amt or 1
+    local max = 0
+    for k, v in pairs(tbl) do max = max + v end
+    local ret = {}
+    for i = 1, amt do
+        local rng = math.random() * max
+        for k, v in pairs(tbl) do
+            rng = rng - v
+            if rng <= 0 then
+                ret[k] = (ret[k] or 0) + 1
+                break
+            end
+        end
+    end
+    return ret
+end
+
+function ArcCW:RollRandomAttachment(all, wep, slot)
+    for k, v in pairs(self:RollRandomAttachments(1, all, wep, slot)) do return k end
+end
+
+function ArcCW:RollRandomAttachments(amt, all, wep, slot)
+    if wep == nil then
+        -- cache the list results and randomly get one
+        local tbl = self:GetAttList("random" .. (all and "_all" or ""), function(k, v)
+            if ((!v.Free and !v.InvAtt) or all) and !v.NoRandom and (v.RandomWeight or 1) >= 0 then
+                return k, v.RandomWeight or 1
+            end
+        end)
+        return weighted_random(tbl, amt)
+    else
+        -- can't cache this because it is weapon-dependent
+        local tbl = {}
+        for id, atttbl in pairs(ArcCW.AttachmentTable) do
+            if ((!atttbl.Free and !atttbl.InvAtt) or all) and (atttbl.NoRandom or (atttbl.RandomWeight or 1) <= 0) then continue end
+            if !wep:CheckFlags(atttbl.ExcludeFlags, atttbl.RequireFlags) then continue end
+            if slot != nil and !ArcCW:SlotAcceptsAtt(slot.Slot, wep, id) then continue end
+            tbl[id] = atttbl.RandomWeight or 1
+        end
+        return weighted_random(tbl, amt)
+    end
 end
 
 function ArcCW:SlotAcceptsAtt(slot, wep, att)
@@ -50,9 +106,11 @@ function ArcCW:SlotAcceptsAtt(slot, wep, att)
 
     if atttbl.Hidden or atttbl.Blacklisted or ArcCW.AttachmentBlacklistTable[att] then return false end
 
-    if (atttbl.NotForNPC or atttbl.NotForNPCs) and wep.Owner:IsNPC() then
+    local Owner = wep:GetOwner()
+    if (atttbl.NotForNPC or atttbl.NotForNPCs) and Owner and Owner:IsNPC() then
         return false
     end
+    if atttbl.AdminOnly and IsValid(Owner) and !(Owner:IsPlayer() and Owner:IsAdmin()) then return false end
 
     if wep.RejectAttachments and wep.RejectAttachments[att] then return false end
 
@@ -97,6 +155,7 @@ function ArcCW:WeaponAcceptsAtt(wep, att)
 end
 
 function ArcCW:PlayerGetAtts(ply, att)
+    if !IsValid(ply) then return 0 end
     if GetConVar("arccw_attinv_free"):GetBool() then return 999 end
 
     if att == "" then return 999 end
@@ -134,6 +193,8 @@ function ArcCW:PlayerGiveAtt(ply, att, amt)
     local atttbl = ArcCW.AttachmentTable[att]
 
     if !atttbl then print("Invalid att " .. att) return end
+    if atttbl.Free then return end -- You can't give a free attachment, silly
+    if atttbl.AdminOnly and !(ply:IsPlayer() and ply:IsAdmin()) then return false end
 
     if atttbl.InvAtt then att = atttbl.InvAtt end
 
@@ -157,20 +218,21 @@ function ArcCW:PlayerTakeAtt(ply, att, amt)
     end
 
     local atttbl = ArcCW.AttachmentTable[att]
+    if !atttbl or atttbl.Free then return end
 
     if atttbl.InvAtt then att = atttbl.InvAtt end
 
     ply.ArcCW_AttInv[att] = ply.ArcCW_AttInv[att] or 0
 
+    if ply.ArcCW_AttInv[att] < amt then
+        return false
+    end
+
+    ply.ArcCW_AttInv[att] = ply.ArcCW_AttInv[att] - amt
     if ply.ArcCW_AttInv[att] <= 0 then
-        return
+        ply.ArcCW_AttInv[att] = nil
     end
-
-    ply.ArcCW_AttInv[att] = (ply.ArcCW_AttInv[att] or 0) - amt
-
-    if ply.ArcCW_AttInv[att] < 0 then
-        ply.ArcCW_AttInv[att] = 0
-    end
+    return true
 end
 
 if CLIENT then
@@ -241,6 +303,12 @@ net.Receive("arccw_sendattinv", function(len, ply)
 
         LocalPlayer().ArcCW_AttInv[att] = acount
     end
+
+    -- This function will not exist until initialized (by having an ArcCW weapon exist)!
+    -- It also obviously needs menu2 open
+    if ArcCW.InvHUD_FormAttachmentSelect and IsValid(ArcCW.InvHUD) and IsValid(ArcCW.InvHUD_Menu2) then
+        ArcCW.InvHUD_FormAttachmentSelect()
+    end
 end)
 
 net.Receive("arccw_sendatthp", function(len, ply)
@@ -277,9 +345,15 @@ hook.Add("PlayerSpawn", "ArcCW_SpawnAttInv", function(ply, trans)
 
     if GetConVar("arccw_attinv_loseondie"):GetInt() >= 1 then
         ply.ArcCW_AttInv = {}
-
-        ArcCW:PlayerSendAttInv(ply)
     end
+    local amt = GetConVar("arccw_attinv_giveonspawn"):GetInt()
+    if amt > 0 then
+        local giv = ArcCW:RollRandomAttachments(amt)
+        for k, v in pairs(giv) do
+            ArcCW:PlayerGiveAtt(ply, k, v)
+        end
+    end
+    ArcCW:PlayerSendAttInv(ply)
 end)
 
 net.Receive("arccw_rqwpnnet", function(len, ply)

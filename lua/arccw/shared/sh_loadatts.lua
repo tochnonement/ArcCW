@@ -6,6 +6,8 @@ ArcCW.AttachmentBlacklistTable = {}
 ArcCW.NumAttachments = 1
 ArcCW.GenerateAttEntities = true
 
+ArcCW.AttachmentCachedLists = {}
+
 local shortname = ""
 local genAttCvar = GetConVar("arccw_reloadatts_registerentities")
 
@@ -50,12 +52,22 @@ function ArcCW.LoadAttachmentType(att)
     end
 end
 
+local function VerifyBlacklist()
+    for attName, v in pairs(ArcCW.AttachmentBlacklistTable) do
+        if !ArcCW.AttachmentTable[attName] then
+            ArcCW.AttachmentBlacklistTable[attName] = nil
+        end
+    end
+end
+
 local function ArcCW_SendBlacklist(ply)
     if SERVER then
         -- Only load if table is empty, bruh
         if table.IsEmpty(ArcCW.AttachmentBlacklistTable) then
             ArcCW.AttachmentBlacklistTable = util.JSONToTable(file.Read("arccw_blacklist.txt") or "") or {}
-            print("Loaded " .. table.Count(ArcCW.AttachmentBlacklistTable) .. " blacklisted ArcCW attachments.")
+            local curcount = table.Count(ArcCW.AttachmentBlacklistTable)
+            VerifyBlacklist()
+            print("Loaded " .. table.Count(ArcCW.AttachmentBlacklistTable) .. " active (" .. curcount .. " total) blacklisted ArcCW attachments.")
         end
         if ArcCW.AttachmentBlacklistTable and player.GetCount() > 0 then
             timer.Simple(0, function()
@@ -91,10 +103,16 @@ local function ArcCW_LoadAtts()
     ArcCW.AttachmentSlotTable = {}
     ArcCW.NumAttachments = 1
     ArcCW.AttachmentBits = nil
+    ArcCW.AttachmentCachedLists = {}
 
     for k, v in pairs(file.Find("arccw/shared/attachments/*", "LUA")) do
         if !pcall(function() ArcCW_LoadAtt(v) end) then
             print("!!!! Attachment " .. v .. " has errors!")
+            -- Create a stub attachment to prevent customization UI freaking out
+            ArcCW.AttachmentTable[shortname] = {
+                PrintName = shortname or "ERROR",
+                Description = "This attachment failed to load!\nIts file path is: " .. v
+            }
         end
     end
 

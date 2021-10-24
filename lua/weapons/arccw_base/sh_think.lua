@@ -6,24 +6,42 @@ local lastUBGL = 0
 local LastAttack2 = false
 
 function SWEP:Think()
+    if IsValid(self:GetOwner()) and self:GetClass() == "arccw_base" then
+        self:Remove()
+        return
+    end
+
     local owner = self:GetOwner()
 
     if !IsValid(owner) or owner:IsNPC() then return end
+
+    for i, v in ipairs(self.EventTable) do
+        for ed, bz in pairs(v) do
+            if ed <= CurTime() then
+                self:PlayEvent(bz)
+                self.EventTable[i][ed] = nil
+                --print(CurTime(), "Event completed at " .. i, ed)
+                if table.IsEmpty(v) and i != 1 then self.EventTable[i] = nil --[[print(CurTime(), "No more events at " .. i .. ", killing")]] end
+            end
+        end
+    end
+
+    if CLIENT and (!game.SinglePlayer() and IsFirstTimePredicted() or true)
+            and self:GetOwner() == LocalPlayer() and ArcCW.InvHUD
+            and !ArcCW.Inv_Hidden and ArcCW.Inv_Fade == 0 then
+        ArcCW.InvHUD:Remove()
+        ArcCW.Inv_Fade = 0.01
+    end
 
     local vm = owner:GetViewModel()
 
     self.BurstCount = self:GetBurstCount()
 
-    if owner:KeyPressed(IN_ATTACK) then
-        self:SetReqEnd(true)
-    end
-
-    if CLIENT then
-        if ArcCW.LastWeapon != self then
-            self:LoadPreset("autosave")
-        end
-
-        ArcCW.LastWeapon = self
+    local sg = self:GetShotgunReloading()
+    if (sg == 2 or sg == 4) and owner:KeyPressed(IN_ATTACK) then
+        self:SetShotgunReloading(sg + 1)
+    elseif (sg >= 2) and self:GetReloadingREAL() <= CurTime() then
+        self:ReloadInsert((sg >= 4) and true or false)
     end
 
     self:InBipod()
@@ -66,7 +84,9 @@ function SWEP:Think()
 
     if self:GetCurrentFiremode().RunawayBurst and self:Clip1() > 0 then
         if self:GetBurstCount() > 0 then
-            self:PrimaryAttack()
+            if (game.SinglePlayer() and SERVER) or (!game.SinglePlayer() and true) then
+                self:PrimaryAttack()
+            end
         end
 
         if self:GetBurstCount() == self:GetBurstLength() then
@@ -87,16 +107,8 @@ function SWEP:Think()
 
             if (CurTime() + postburst) > self:GetWeaponOpDelay() then
                 --self:SetNextPrimaryFire(CurTime() + postburst)
-                self:SetWeaponOpDelay(CurTime() + postburst)
+                self:SetWeaponOpDelay(CurTime() + postburst * self:GetBuff_Mult("Mult_PostBurstDelay") + self:GetBuff_Add("Add_PostBurstDelay"))
             end
-        end
-    end
-
-    if IsFirstTimePredicted() then
-        if self:InSprint() and (!self.Sprinted or self:GetState() != ArcCW.STATE_SPRINT) then
-            self:EnterSprint()
-        elseif !self:InSprint() and (self.Sprinted or self:GetState() == ArcCW.STATE_SPRINT) then
-            self:ExitSprint()
         end
     end
 
@@ -143,7 +155,8 @@ function SWEP:Think()
 
         -- no it really doesn't, past me
         local sighted = self:GetState() == ArcCW.STATE_SIGHTS
-        local toggle = self:GetOwner():GetInfoNum("arccw_toggleads", 0) >= 1
+        local toggle = owner:GetInfoNum("arccw_toggleads", 0) >= 1
+        local suitzoom = owner:KeyDown(IN_ZOOM)
         local sp_cl = game.SinglePlayer() and CLIENT
 
         -- if in singleplayer, client realm should be completely ignored
@@ -151,21 +164,34 @@ function SWEP:Think()
             if owner:KeyPressed(IN_ATTACK2) then
                 if sighted then
                     self:ExitSights()
-                else
+                elseif !suitzoom then
                     self:EnterSights()
                 end
+            elseif suitzoom and sighted then
+                self:ExitSights()
             end
         elseif !toggle then
-            if owner:KeyDown(IN_ATTACK2) and !sighted then
+            if (owner:KeyDown(IN_ATTACK2) and !suitzoom) and !sighted then
                 self:EnterSights()
-            elseif !owner:KeyDown(IN_ATTACK2) and sighted then
+            elseif (!owner:KeyDown(IN_ATTACK2) or suitzoom) and sighted then
                 self:ExitSights()
             end
         end
 
     end
 
-    if (CLIENT or game.SinglePlayer()) and (IsFirstTimePredicted() or game.SinglePlayer()) then
+    if (!game.SinglePlayer() and IsFirstTimePredicted()) or (game.SinglePlayer() and true) then 
+        if self:InSprint() and (self:GetState() != ArcCW.STATE_SPRINT) then
+            self:EnterSprint()
+        elseif !self:InSprint() and (self:GetState() == ArcCW.STATE_SPRINT) then
+            self:ExitSprint()
+        end
+    end
+
+    self:SetSightDelta(math.Approach(self:GetSightDelta(), (self:GetState() == ArcCW.STATE_SIGHTS and 0 or 1), FrameTime()/self:GetSightTime()))
+    self:SetSprintDelta(math.Approach(self:GetSprintDelta(), (self:GetState() == ArcCW.STATE_SPRINT and 1 or 0), FrameTime()/self:GetSprintTime()))
+
+    if CLIENT and (game.SinglePlayer() and true or IsFirstTimePredicted()) then
         self:ProcessRecoil()
     end
 
@@ -260,8 +286,12 @@ function SWEP:Think()
     -- self:RefreshBGs()
 
     if self:GetMagUpIn() != 0 and CurTime() > self:GetMagUpIn() then
-        self:WhenTheMagUpIn()
+        self:ReloadTimed()
         self:SetMagUpIn( 0 )
+    end
+
+    if self:HasBottomlessClip() and self:Clip1() >= 0 then
+        self:Unload()
     end
 
     self:GetBuff_Hook("Hook_Think")
@@ -270,37 +300,37 @@ function SWEP:Think()
     --if SERVER or !game.SinglePlayer() then
         self:ProcessTimers()
     --end
+
+    -- Only reset to idle if we don't need cycle. empty idle animation usually doesn't play nice
+    if self:GetNextIdle() != 0 and self:GetNextIdle() <= CurTime() and !self:GetNeedCycle()
+            and self:GetHolster_Time() == 0 and self:GetShotgunReloading() == 0 then
+        self:SetNextIdle(0)
+        self:PlayIdleAnimation(true)
+    end
 end
+
+local lst = SysTime()
 
 function SWEP:ProcessRecoil()
     local owner = self:GetOwner()
-    local ft = FrameTime()
+    local ft = (SysTime() - (lst or SysTime())) * GetConVar("host_timescale"):GetFloat()
     local newang = owner:EyeAngles()
-    local r = self.RecoilAmount -- self:GetNWFloat("recoil", 0)
-    local rs = self.RecoilAmountSide -- self:GetNWFloat("recoilside", 0)
+    -- local r = self.RecoilAmount -- self:GetNWFloat("recoil", 0)
+    -- local rs = self.RecoilAmountSide -- self:GetNWFloat("recoilside", 0)
 
     local ra = Angle(0, 0, 0)
 
-    ra = ra + ((self:GetBuff_Override("Override_RecoilDirection") or self.RecoilDirection) * self.RecoilAmount * 0.5)
-    ra = ra + ((self:GetBuff_Override("Override_RecoilDirectionSide") or self.RecoilDirectionSide) * self.RecoilAmountSide * 0.5)
+    ra = ra + (self:GetBuff_Override("Override_RecoilDirection", self.RecoilDirection) * self.RecoilAmount * 0.5)
+    ra = ra + (self:GetBuff_Override("Override_RecoilDirectionSide", self.RecoilDirectionSide) * self.RecoilAmountSide * 0.5)
 
     newang = newang - ra
-
-    -- self.RecoilAmount = r - math.Clamp(ft * 20, 0, r)
-    -- self.RecoilAmountSide = rs - math.Clamp(ft * 20, 0, rs)
-
-    self.RecoilAmount = math.Approach(self.RecoilAmount, 0, ft * 20 * r)
-    self.RecoilAmountSide = math.Approach(self.RecoilAmountSide, 0, ft * 20 * rs)
-
-    -- self:SetNWFloat("recoil", r - (FrameTime() * r * 50))
-    -- self:SetNWFloat("recoilside", rs - (FrameTime() * rs * 50))
 
     local rpb = self.RecoilPunchBack
     local rps = self.RecoilPunchSide
     local rpu = self.RecoilPunchUp
 
     if rpb != 0 then
-        self.RecoilPunchBack = math.Approach(rpb, 0, ft * rpb * 2.5)
+        self.RecoilPunchBack = math.Approach(rpb, 0, ft * rpb * 10)
     end
 
     if rps != 0 then
@@ -310,6 +340,8 @@ function SWEP:ProcessRecoil()
     if rpu != 0 then
         self.RecoilPunchUp = math.Approach(rpu, 0, ft * rpu * 5)
     end
+
+    lst = SysTime()
 end
 
 function SWEP:InSprint()
@@ -362,8 +394,8 @@ function SWEP:DoTriggerDelay()
         if anim then
             self:PlayAnimation(anim, self:GetBuff_Mult("Mult_TriggerDelayTime"), true, 0)
             --self:SetNextPrimaryFire(CurTime() + self:GetAnimKeyTime(anim))
-        else
-            self:PlayIdleAnimation(true)
+        --else
+        --    self:PlayIdleAnimation(true)
         end
         self.LastTriggerTime = 0
         self.LastTriggerDuration = 0
