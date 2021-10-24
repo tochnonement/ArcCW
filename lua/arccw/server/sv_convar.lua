@@ -1,7 +1,7 @@
 net.Receive("arccw_sendconvar", function(len, ply)
     local command = net.ReadString()
 
-    if !ply:IsAdmin() then return end
+    if !ply:IsSuperAdmin() then return end
     if game.SinglePlayer() then return end
     if string.sub(command, 1, 5) != "arccw" then return end
 

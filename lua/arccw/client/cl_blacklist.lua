@@ -283,5 +283,5 @@ function ArcCW.MakeBlacklistWindow()
 end
 
 concommand.Add("arccw_blacklist", function()
-    if LocalPlayer():IsAdmin() then ArcCW.MakeBlacklistWindow() end
+    if LocalPlayer():IsSuperAdmin() then ArcCW.MakeBlacklistWindow() end
 end)

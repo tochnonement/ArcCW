@@ -205,7 +205,7 @@ elseif SERVER then
 
             ArcCW_SendBlacklist(ply)
             return
-        elseif !isRequest and !ply:IsAdmin() then
+        elseif !isRequest and !ply:IsSuperAdmin() then
             return
         end
 
