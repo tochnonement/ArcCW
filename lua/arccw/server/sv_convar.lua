@@ -22,7 +22,7 @@ net.Receive("arccw_sendconvar", function(len, ply)
     end
 
     timer.Create(timername, 0.25, 1, function()
-        RunConsoleCommand(args[1], args[2])
+        GetConVar(args[1]):SetString(args[2])
         print("Changed " .. args[1] .. " to " .. args[2] .. ".")
     end)
 end)
